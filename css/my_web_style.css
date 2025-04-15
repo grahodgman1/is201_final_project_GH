@@ -1,0 +1,14 @@
+.my_special_text {
+    
+}
+
+
+body{
+    font-family: Georgia, 'Times New Roman', Times, serif;
+    /* need to link this with my other page. link it in the head part. */
+    color: rgb(5, 54, 7);
+}
+
+
+
+

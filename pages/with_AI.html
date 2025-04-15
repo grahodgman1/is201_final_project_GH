@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban Board - Blue</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Basic styling */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #eff6ff; /* Tailwind blue-50 */
+        }
+        /* Style for TASKS being dragged */
+        .task.dragging {
+            opacity: 0.5;
+            border: 2px dashed #93c5fd; /* Tailwind blue-300 */
+        }
+        /* Style for LISTS being dragged */
+        .list.dragging-list {
+            opacity: 0.6;
+            background-color: #dbeafe; /* blue-100 */
+            border: 2px dashed #60a5fa; /* blue-400 */
+            transform: rotate(2deg); /* Slight tilt */
+        }
+        /* Style for potential drop targets (lists for tasks) */
+        .list.drag-over {
+            background-color: #dbeafe; /* Tailwind blue-100 slightly darker */
+            border-color: #60a5fa; /* Tailwind blue-400 */
+        }
+        /* Placeholder for list reordering */
+        .list-placeholder {
+            background-color: #bfdbfe; /* blue-200 */
+            border: 2px dashed #3b82f6; /* blue-500 */
+            border-radius: 0.5rem; /* rounded-lg */
+            height: 100px; /* Example height, adjust as needed */
+            width: 300px; /* Match list width */
+            flex-shrink: 0;
+        }
+        /* Hide scrollbar but allow scrolling */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* List container layout */
+        #listsContainer {
+            display: flex;
+            overflow-x: auto;
+            padding-bottom: 1rem;
+            min-height: calc(100vh - 150px); /* Adjust based on header height */
+            align-items: flex-start; /* Align lists to the top */
+        }
+        /* List styling */
+        .list {
+            flex: 0 0 auto; /* Prevent lists from shrinking/growing */
+            width: 300px;
+            max-height: calc(100vh - 180px); /* Max height for list content */
+            display: flex;
+            flex-direction: column;
+            background-color: #dbeafe; /* blue-100 */
+            border-radius: 0.5rem; /* rounded-lg */
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); /* shadow */
+            padding: 1rem; /* p-4 */
+            margin-right: 1rem; /* space-x-4 equivalent */
+            border: 1px solid #bfdbfe; /* border-blue-200 */
+        }
+        /* Ensure last list doesn't have extra margin */
+        .list:last-child {
+             margin-right: 0;
+        }
+        .list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem; /* space-y-3 equivalent */
+            cursor: grab; /* Indicate the header is draggable */
+        }
+         .list-header:active {
+             cursor: grabbing;
+         }
+        .list-title {
+            font-weight: 600; /* font-semibold */
+            font-size: 1.125rem; /* text-lg */
+            color: #1e3a8a; /* text-blue-800 */
+            word-break: break-word;
+            flex-grow: 1; /* Allow title to take space */
+            margin-right: 0.5rem; /* Add space between title and delete button */
+        }
+        .delete-list-btn {
+             color: #60a5fa; /* text-blue-400 */
+             background: none;
+             border: none;
+             font-size: 1.25rem; /* Larger X */
+             font-weight: bold;
+             cursor: pointer;
+             padding: 0 0.25rem;
+             line-height: 1;
+             flex-shrink: 0; /* Prevent button from shrinking */
+        }
+        .delete-list-btn:hover {
+            color: #dc2626; /* text-red-600 */
+        }
+        .list-tasks {
+            overflow-y: auto; /* Allow vertical scrolling */
+            flex-grow: 1;
+            padding: 0.25rem; /* p-1 */
+            margin: -0.25rem; /* -m-1 */
+            space-y: 0.5rem; /* space-y-2 */
+        }
+        .add-task-area {
+            margin-top: auto; /* Push to bottom */
+            padding-top: 0.5rem; /* pt-2 */
+        }
+        /* Task styling */
+        .task {
+            background-color: #ffffff; /* bg-white */
+            padding: 0.75rem; /* p-3 */
+            border-radius: 0.375rem; /* rounded-md */
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* shadow */
+            border: 1px solid #e0e7ff; /* border-blue-200 */
+            cursor: grab;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .task:active { cursor: grabbing; }
+        .task-content {
+            word-break: break-word;
+            margin-right: 0.5rem;
+            flex-grow: 1;
+            color: #1e40af; /* text-blue-700 */
+        }
+        .delete-task-btn {
+            color: #93c5fd; /* text-blue-300 */
+            font-size: 0.75rem; /* text-xs */
+            font-weight: bold;
+            margin-left: 0.5rem;
+            flex-shrink: 0;
+            background: none;
+            border: none;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .delete-task-btn:hover { color: #ef4444; /* text-red-500 */ }
+    </style>
+</head>
+<body class="bg-blue-50 text-blue-800 p-4 md:p-8 min-h-screen">
+
+    <div class="container mx-auto">
+        <h1 class="text-3xl font-bold text-blue-700 mb-6 text-center">My Kanban Board</h1>
+
+        <div class="mb-6 p-4 bg-blue-100 rounded-lg shadow flex items-center space-x-2 border border-blue-200">
+            <input type="text" id="newListName" placeholder="Enter new list name..." class="flex-grow p-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 text-blue-900 placeholder-blue-400">
+            <button id="addListBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md shadow transition duration-150 ease-in-out">
+                Add List
+            </button>
+        </div>
+
+        <div id="listsContainer" class="no-scrollbar">
+            </div>
+    </div>
+
+    <template id="listTemplate">
+        <div class="list" data-list-id="" draggable="true"> <div class="list-header"> <h2 class="list-title">List Title</h2>
+                <button class="delete-list-btn" title="Delete list">×</button>
+            </div>
+            <div class="list-tasks no-scrollbar">
+                </div>
+            <div class="add-task-area">
+                <input type="text" class="new-task-input w-full p-2 border border-blue-300 rounded-md mb-2 focus:outline-none focus:ring-1 focus:ring-blue-400 text-blue-900 placeholder-blue-400" placeholder="Add a new task...">
+                <button class="add-task-btn w-full bg-blue-400 hover:bg-blue-500 text-white text-sm font-medium py-1 px-3 rounded-md shadow transition duration-150 ease-in-out">Add Task</button>
+            </div>
+        </div>
+    </template>
+
+    <template id="taskTemplate">
+        <div class="task" draggable="true" data-task-id="">
+            <p class="task-content"></p>
+            <button class="delete-task-btn" title="Delete task">✕</button>
+        </div>
+    </template>
+
+    <script>
+        // DOM Elements
+        const listsContainer = document.getElementById('listsContainer');
+        const addListBtn = document.getElementById('addListBtn');
+        const newListNameInput = document.getElementById('newListName');
+        const listTemplate = document.getElementById('listTemplate');
+        const taskTemplate = document.getElementById('taskTemplate');
+
+        // State Variables
+        let draggedTask = null; // Reference to the task being dragged
+        let sourceListId = null; // ID of the list the task is being dragged from
+        let draggedList = null; // Reference to the list being dragged
+
+        // --- Local Storage Functions ---
+        function saveData() {
+            const lists = [];
+            // Select lists directly from the container to preserve order
+            listsContainer.querySelectorAll('.list').forEach(listElement => {
+                const listId = listElement.dataset.listId;
+                const listTitle = listElement.querySelector('.list-title').textContent;
+                const tasks = [];
+                listElement.querySelectorAll('.task').forEach(taskElement => {
+                    tasks.push({
+                        id: taskElement.dataset.taskId,
+                        content: taskElement.querySelector('.task-content').textContent
+                    });
+                });
+                lists.push({ id: listId, title: listTitle, tasks });
+            });
+            localStorage.setItem('kanbanData', JSON.stringify(lists));
+            console.log("Data saved:", lists);
+        }
+
+        function loadData() {
+            const data = localStorage.getItem('kanbanData');
+            listsContainer.innerHTML = ''; // Clear existing lists before loading
+            if (data) {
+                const lists = JSON.parse(data);
+                console.log("Data loaded:", lists);
+                lists.forEach(listData => {
+                    // Pass false to prevent saving during initial load loop
+                    const newList = createListElement(listData.title, listData.id, false);
+                    const tasksContainer = newList.querySelector('.list-tasks');
+                    listData.tasks.forEach(taskData => {
+                        // Pass false to prevent saving during initial load loop
+                        const newTask = createTaskElement(taskData.content, taskData.id, false);
+                        tasksContainer.appendChild(newTask);
+                    });
+                    listsContainer.appendChild(newList);
+                });
+            } else {
+                 console.log("No saved data found. Creating default lists.");
+                 const defaultLists = [
+                     { id: `list-${Date.now()}-1`, title: "To Do", tasks: [{id: `task-${Date.now()}-1`, content: "Example Task 1: Drag me!"}] },
+                     { id: `list-${Date.now()}-2`, title: "In Progress", tasks: [] },
+                     { id: `list-${Date.now()}-3`, title: "Done", tasks: [] }
+                 ];
+                 defaultLists.forEach(listData => {
+                    const newList = createListElement(listData.title, listData.id, false); // Pass false
+                    const tasksContainer = newList.querySelector('.list-tasks');
+                    listData.tasks.forEach(taskData => {
+                        const newTask = createTaskElement(taskData.content, taskData.id, false); // Pass false
+                        tasksContainer.appendChild(newTask);
+                    });
+                    listsContainer.appendChild(newList);
+                 });
+                 saveData(); // Save the default setup *once* after creating all defaults
+            }
+        }
+
+        // --- Task Functions ---
+        // Added shouldSave parameter to prevent saving multiple times during load
+        function createTaskElement(content, taskId = `task-${Date.now()}`, shouldSave = true) {
+            const taskElement = taskTemplate.content.cloneNode(true).querySelector('.task');
+            taskElement.dataset.taskId = taskId;
+            taskElement.querySelector('.task-content').textContent = content;
+
+            // Add task drag event listeners
+            taskElement.addEventListener('dragstart', handleTaskDragStart);
+            taskElement.addEventListener('dragend', handleTaskDragEnd);
+
+            // Add delete functionality
+            const deleteBtn = taskElement.querySelector('.delete-task-btn');
+            deleteBtn.addEventListener('click', () => {
+                taskElement.remove();
+                if (shouldSave) saveData();
+            });
+
+            return taskElement;
+        }
+
+        // --- List Functions ---
+        // Added shouldSave parameter
+        function createListElement(title, listId = `list-${Date.now()}`, shouldSave = true) {
+            const listElement = listTemplate.content.cloneNode(true).querySelector('.list');
+            listElement.dataset.listId = listId;
+            listElement.querySelector('.list-title').textContent = title;
+
+            const listHeader = listElement.querySelector('.list-header');
+            const addTaskBtn = listElement.querySelector('.add-task-btn');
+            const newTaskInput = listElement.querySelector('.new-task-input');
+            const tasksContainer = listElement.querySelector('.list-tasks');
+            const deleteListBtn = listElement.querySelector('.delete-list-btn');
+
+            // Add task functionality
+            addTaskBtn.addEventListener('click', () => {
+                const taskContent = newTaskInput.value.trim();
+                if (taskContent) {
+                    const newTask = createTaskElement(taskContent); // Will save by default
+                    tasksContainer.appendChild(newTask);
+                    newTaskInput.value = '';
+                } else {
+                    // Consider a less intrusive notification
+                    console.warn("Task content cannot be empty.");
+                    newTaskInput.focus();
+                }
+            });
+            newTaskInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') addTaskBtn.click();
+            });
+
+            // Add list delete functionality
+            deleteListBtn.addEventListener('click', () => {
+                if (confirm(`Are you sure you want to delete the list "${title}" and all its tasks?`)) {
+                    listElement.remove();
+                    if (shouldSave) saveData();
+                }
+            });
+
+            // --- Drag and Drop Listeners ---
+
+            // For TASKS being dropped ONTO this list
+            tasksContainer.addEventListener('dragover', handleTaskDragOver);
+            tasksContainer.addEventListener('drop', handleTaskDrop);
+            listElement.addEventListener('dragover', handleTaskDragOver); // Allow dropping on empty list area
+            listElement.addEventListener('drop', handleTaskDrop);
+
+            // For the LIST itself being dragged
+            // Use the header as the drag handle
+            listHeader.addEventListener('dragstart', handleListDragStart);
+            listElement.addEventListener('dragend', handleListDragEnd); // Use listElement for dragend
+
+            return listElement;
+        }
+
+        // --- Task Drag and Drop Handlers ---
+        function handleTaskDragStart(event) {
+             // Ensure we don't trigger when dragging the list header
+            if (!event.target.classList.contains('task')) {
+                 event.preventDefault();
+                 return;
+            }
+            draggedTask = event.target;
+            sourceListId = draggedTask.closest('.list').dataset.listId;
+            event.dataTransfer.setData('text/plain', draggedTask.dataset.taskId);
+            event.dataTransfer.effectAllowed = 'move';
+            setTimeout(() => draggedTask.classList.add('dragging'), 0);
+            console.log(`Dragging TASK: ${draggedTask.dataset.taskId} from list: ${sourceListId}`);
+        }
+
+        function handleTaskDragOver(event) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+            const targetList = event.target.closest('.list');
+            if (targetList) {
+                document.querySelectorAll('.list.drag-over').forEach(el => el.classList.remove('drag-over'));
+                targetList.classList.add('drag-over');
+            }
+        }
+
+        function handleTaskDrop(event) {
+            event.preventDefault();
+            event.stopPropagation(); // Prevent drop event from bubbling to list drag handler if nested
+            const targetElement = event.target;
+            const targetList = targetElement.closest('.list');
+
+            if (targetList && draggedTask) {
+                const targetTasksContainer = targetList.querySelector('.list-tasks');
+                const dropTargetTask = targetElement.closest('.task');
+
+                if (dropTargetTask && targetTasksContainer.contains(dropTargetTask)) {
+                    targetTasksContainer.insertBefore(draggedTask, dropTargetTask);
+                } else {
+                    targetTasksContainer.appendChild(draggedTask);
+                }
+                console.log(`Dropped TASK: ${draggedTask.dataset.taskId} onto list: ${targetList.dataset.listId}`);
+                saveData();
+            }
+            document.querySelectorAll('.list.drag-over').forEach(el => el.classList.remove('drag-over'));
+        }
+
+        function handleTaskDragEnd() {
+            if (draggedTask) {
+                draggedTask.classList.remove('dragging');
+            }
+            document.querySelectorAll('.list.drag-over').forEach(el => el.classList.remove('drag-over'));
+            draggedTask = null;
+            sourceListId = null;
+            console.log("Task drag ended.");
+        }
+
+        // --- List Drag and Drop Handlers ---
+        function handleListDragStart(event) {
+             // Only start drag if the target is the list header itself
+             if (!event.target.classList.contains('list-header')) {
+                 // Check parent if needed, but simple check might suffice
+                 if (!event.target.closest('.list-header')) {
+                    event.preventDefault();
+                    return;
+                 }
+             }
+
+             // Find the parent list element
+             draggedList = event.target.closest('.list');
+             if (!draggedList) return; // Should not happen if event target is correct
+
+             event.dataTransfer.setData('text/plain', draggedList.dataset.listId); // Can be useful
+             event.dataTransfer.effectAllowed = 'move';
+
+             // Add styling slightly later to ensure it's applied
+             setTimeout(() => {
+                 if (draggedList) draggedList.classList.add('dragging-list');
+             }, 0);
+
+             console.log(`Dragging LIST: ${draggedList.dataset.listId}`);
+        }
+
+         // Need dragover on the main container to detect where to drop lists
+        listsContainer.addEventListener('dragover', handleListDragOver);
+
+        function handleListDragOver(event) {
+            event.preventDefault(); // Allow drop
+            if (!draggedList) return; // Only handle when a list is being dragged
+
+            event.dataTransfer.dropEffect = 'move';
+
+            const afterElement = getListDragAfterElement(listsContainer, event.clientX);
+            const currentPlaceholder = listsContainer.querySelector('.list-placeholder');
+
+            if (!currentPlaceholder) {
+                const placeholder = document.createElement('div');
+                placeholder.classList.add('list-placeholder');
+                placeholder.style.height = `${draggedList.offsetHeight}px`; // Match height
+                if (afterElement == null) {
+                    listsContainer.appendChild(placeholder);
+                } else {
+                    listsContainer.insertBefore(placeholder, afterElement);
+                }
+            } else {
+                 // Move existing placeholder
+                 if (afterElement == null) {
+                    listsContainer.appendChild(currentPlaceholder);
+                } else {
+                    // Only move if the target position changes
+                    if (currentPlaceholder !== afterElement && currentPlaceholder.nextSibling !== afterElement) {
+                        listsContainer.insertBefore(currentPlaceholder, afterElement);
+                    }
+                }
+                 // Update placeholder height in case list content changed height
+                 currentPlaceholder.style.height = `${draggedList.offsetHeight}px`;
+            }
+        }
+
+        // Helper function to determine where to insert the dragged list
+        function getListDragAfterElement(container, x) {
+            const draggableElements = [...container.querySelectorAll('.list:not(.dragging-list)')]; // Get lists that are not being dragged
+
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = x - box.left - box.width / 2; // Distance from center of list
+                // If offset is negative (cursor is to the left half) and closer than previous closest
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element; // Initial closest is negative infinity
+        }
+
+
+        // Need drop listener on the container as well
+        listsContainer.addEventListener('drop', handleListDrop);
+
+        function handleListDrop(event) {
+            event.preventDefault();
+            if (!draggedList) return; // Make sure we are dropping a list
+
+            const placeholder = listsContainer.querySelector('.list-placeholder');
+            if (placeholder) {
+                // Replace placeholder with the actual dragged list
+                listsContainer.replaceChild(draggedList, placeholder);
+                 console.log(`Dropped LIST: ${draggedList.dataset.listId}`);
+                 saveData(); // Save the new order
+            } else {
+                 // Fallback if placeholder wasn't created correctly (shouldn't happen often)
+                 // Try appending based on drop position if needed, but placeholder method is better
+                 console.warn("List drop occurred without a placeholder.");
+                 // Optional: implement fallback logic if needed
+            }
+        }
+
+
+        function handleListDragEnd(event) {
+            // Clean up placeholder if it still exists (e.g., drag cancelled outside container)
+            const placeholder = listsContainer.querySelector('.list-placeholder');
+            if (placeholder) {
+                placeholder.remove();
+            }
+
+            if (draggedList) {
+                draggedList.classList.remove('dragging-list');
+            }
+            draggedList = null; // Reset
+            console.log("List drag ended.");
+        }
+
+
+        // --- Initial Setup ---
+        addListBtn.addEventListener('click', () => {
+            const listName = newListNameInput.value.trim();
+            if (listName) {
+                const newList = createListElement(listName); // Will save by default
+                listsContainer.appendChild(newList);
+                newListNameInput.value = '';
+            } else {
+                 // Provide feedback without alert
+                 newListNameInput.focus();
+                 newListNameInput.classList.add('border-red-500'); // Indicate error
+                 setTimeout(() => newListNameInput.classList.remove('border-red-500'), 2000);
+            }
+        });
+
+        newListNameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addListBtn.click();
+        });
+
+        // Initial Load
+        document.addEventListener('DOMContentLoaded', loadData);
+
+    </script>
+
+</body>
+</html>
